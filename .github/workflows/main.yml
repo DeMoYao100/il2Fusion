@@ -1,0 +1,55 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ "master", "main" ]
+  pull_request:
+    branches: [ "master", "main" ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # （推荐）安全：校验 gradle-wrapper.jar 是否为官方版本，避免供应链风险
+      - name: Validate Gradle Wrapper
+        uses: gradle/wrapper-validation-action@v3
+        # 这个 action 会校验仓库里的 gradle-wrapper.jar checksum，不匹配就失败 :contentReference[oaicite:2]{index=2}
+
+      # JDK：Android 现代构建通常用 17（不想纠结就用这个）
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          # setup-java 自带 gradle 缓存支持 :contentReference[oaicite:3]{index=3}
+
+      # Android SDK：装 cmdline-tools + platform-tools，并把 sdkmanager 加进 PATH
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        # 该 action 会安装 SDK commandline-tools/platform-tools，并接受 license :contentReference[oaicite:4]{index=4}
+
+      # （可选）如果项目含 NDK/CMake，建议显式安装；不写版本也行，但写了更稳定
+      - name: Install NDK + CMake (optional)
+        shell: bash
+        run: |
+          sdkmanager --install "ndk;26.1.10909125" "cmake;3.22.1"
+          sdkmanager --licenses
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: |
+            **/build/outputs/apk/debug/*.apk
