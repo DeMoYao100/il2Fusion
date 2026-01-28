@@ -119,6 +119,8 @@ fun HookConfigApp(viewModel: HookConfigViewModel = viewModel()) {
                             onUploadUrlChanged = { viewModel.onUploadUrlChanged(context, it) },
                             onStart = { viewModel.startAutoFlow(context) },
                             onStop = { viewModel.stopAutoFlow() },
+                            onTestLsp = { viewModel.testLspDatabase(context) },
+                            onLspAutoEnableChanged = { viewModel.onLspAutoEnableChanged(it) },
                             modifier = Modifier.fillMaxSize()
                         )
                     }

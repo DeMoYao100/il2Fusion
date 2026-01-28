@@ -15,6 +15,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -30,6 +31,8 @@ fun AutoFlowScreen(
     onUploadUrlChanged: (String) -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
+    onTestLsp: () -> Unit,
+    onLspAutoEnableChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val accent = MaterialTheme.colorScheme.primary
@@ -56,8 +59,11 @@ fun AutoFlowScreen(
                 downloadUrl = state.downloadUrl,
                 uploadUrl = state.uploadUrl,
                 enabled = !state.autoRunning,
+                lspAutoEnable = state.lspAutoEnable,
                 onDownloadUrlChanged = onDownloadUrlChanged,
-                onUploadUrlChanged = onUploadUrlChanged
+                onUploadUrlChanged = onUploadUrlChanged,
+                onLspAutoEnableChanged = onLspAutoEnableChanged,
+                onTestLsp = onTestLsp
             )
             AutoControlCard(
                 running = state.autoRunning,
@@ -79,8 +85,11 @@ private fun AutoConfigCard(
     downloadUrl: String,
     uploadUrl: String,
     enabled: Boolean,
+    lspAutoEnable: Boolean,
     onDownloadUrlChanged: (String) -> Unit,
-    onUploadUrlChanged: (String) -> Unit
+    onUploadUrlChanged: (String) -> Unit,
+    onLspAutoEnableChanged: (Boolean) -> Unit,
+    onTestLsp: () -> Unit
 ) {
     Card(
         shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
@@ -111,8 +120,44 @@ private fun AutoConfigCard(
                 enabled = enabled,
                 modifier = Modifier.fillMaxWidth()
             )
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "自动启用 LSPosed 作用域",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                    )
+                    Text(
+                        text = "需要 root 权限",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                androidx.compose.material3.Switch(
+                    checked = lspAutoEnable,
+                    onCheckedChange = onLspAutoEnableChanged,
+                    enabled = enabled
+                )
+            }
+            
+            Button(
+                onClick = onTestLsp,
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("测试 LSP 数据库（添加 bin.mt.plus）")
+            }
+            
             Text(
-                text = "提示：请确保 LSPosed 已勾选目标包，否则不会触发 dump。",
+                text = if (lspAutoEnable) {
+                    "提示：将自动修改 LSPosed 数据库启用目标包。"
+                } else {
+                    "提示：请手动在 LSPosed 勾选目标包，否则不会触发 dump。"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

@@ -139,3 +139,23 @@
   - 更新：`app/src/main/cpp/plugins/dump/dump.cpp`
   - 更新：`chatrules`（追加本次会话总结）
 
+### 2026-01-28（新增：通过 root 权限直接操作 LSPosed 数据库实现真正的全自动）
+- **会话主要目的**：通过 `su` 权限直接修改 `/data/adb/lspd/config/modules_config.db` 的 `scope` 表，实现无需手动勾选包的真正全自动流程。
+- **完成的主要任务**：
+  - 新增 `LspConfigHelper` 工具类，封装对 LSPosed 数据库的读写操作（查询 `mid`、插入/删除 `scope` 记录）。
+  - 在自动流程 UI 新增"测试 LSP 数据库"按钮（测试添加 `bin.mt.plus`）与"自动启用 LSPosed 作用域"开关。
+  - 自动流程在解析出包名后、启动前，自动将目标包添加到 `scope` 表（如开启自动启用）。
+- **关键决策和解决方案**：
+  - 通过 `su -c sqlite3` 执行 SQL 命令操作数据库，避免依赖 LSPosed Manager UI。
+  - 先查询模块的 `mid`，再插入 `(mid, app_pkg_name, user_id)` 到 `scope` 表。
+  - 提供测试按钮验证 root 权限与数据库可写性。
+- **使用的技术栈**：
+  - Android/Kotlin：`Runtime.exec("su")`、SQLite3 命令行工具
+  - ViewModel 协程、Compose UI（Switch、Button）
+- **修改了哪些文件**：
+  - 新增：`app/src/main/java/com/tools/il2fusion/utils/LspConfigHelper.kt`
+  - 更新：`app/src/main/java/com/tools/il2fusion/ui/HookConfigViewModel.kt`
+  - 更新：`app/src/main/java/com/tools/il2fusion/ui/AutoFlowScreen.kt`
+  - 更新：`app/src/main/java/com/tools/il2fusion/ui/HookConfigApp.kt`
+  - 更新：`chatrules`（追加本次会话总结）
+

@@ -16,6 +16,7 @@ import com.tools.il2fusion.config.HookConfigRepository
 import com.tools.il2fusion.config.HookConfigStore
 import com.tools.il2fusion.utils.DumpFileParser
 import com.tools.il2fusion.utils.HookTargetUtils
+import com.tools.il2fusion.utils.LspConfigHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -246,6 +247,13 @@ class HookConfigViewModel(
                     return@forEachIndexed
                 }
                 HookConfigStore.saveTargetPackage(context, pkgName)
+                if (_state.value.lspAutoEnable) {
+                    appendAutoLog("启用 LSP 作用域：$pkgName")
+                    val lspOk = LspConfigHelper.addPackageToScope(pkgName)
+                    if (!lspOk) {
+                        appendAutoLog("LSP 作用域启用失败：$pkgName")
+                    }
+                }
                 appendAutoLog("启动 $pkgName")
                 launchApp(context, pkgName)
                 updateAutoState(
@@ -292,6 +300,26 @@ class HookConfigViewModel(
         autoJob?.cancel()
         autoJob = null
         updateAutoState(isRunning = false, status = "已停止", currentItem = null)
+    }
+
+    fun testLspDatabase(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (!LspConfigHelper.hasRootAccess()) {
+                _events.send(HookConfigEvent.ShowMessage("无 root 权限，无法操作 LSPosed 数据库"))
+                return@launch
+            }
+            val testPkg = "bin.mt.plus"
+            val success = LspConfigHelper.addPackageToScope(testPkg)
+            if (success) {
+                _events.send(HookConfigEvent.ShowMessage("测试成功：已将 $testPkg 添加到作用域"))
+            } else {
+                _events.send(HookConfigEvent.ShowMessage("测试失败：无法添加 $testPkg"))
+            }
+        }
+    }
+
+    fun onLspAutoEnableChanged(enabled: Boolean) {
+        _state.value = _state.value.copy(lspAutoEnable = enabled)
     }
 
     private fun updateState(block: (HookConfigState) -> HookConfigState) {
@@ -554,7 +582,8 @@ data class HookConfigState(
     val autoCurrentItem: String? = null,
     val autoProgress: Int = 0,
     val autoTotal: Int = 0,
-    val autoLogs: List<String> = emptyList()
+    val autoLogs: List<String> = emptyList(),
+    val lspAutoEnable: Boolean = true
 )
 
 /**
