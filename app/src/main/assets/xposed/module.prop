@@ -1,0 +1,8 @@
+name=il2Fusion Module
+version=1
+versionCode=1
+author=PenguinAndy
+description=Reverse tools for Android Unity game
+minApi=21
+package=com.tools.il2fusion
+xposedminversion=93

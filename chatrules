@@ -1,0 +1,121 @@
+## 会话记忆（累计追加）
+
+### 2026-01-28
+- **会话主要目的**：详细讲解 `il2Fusion` 项目的整体架构、关键模块与工作流程。
+- **完成的主要任务**：
+  - 梳理工程结构（Android App + LSPosed/Xposed 注入 + NDK/C++ Native Hook）。
+  - 解释两条核心工作流：Dump 模式、文本拦截模式。
+  - 标注关键入口文件与配置/IPC 的实现方式。
+- **关键决策和解决方案**：
+  - 采用 **ContentProvider 作为跨进程配置通道**（`com.tools.il2fusion.provider/config`），避免 SharedPreferences 跨进程不可读带来的同步问题。
+  - 在 **Xposed 的 `Application.attach(Context)`** 时机加载 `libnative_hook.so` 并初始化 JNI，确保能拿到 `Context/dataDir` 且尽早介入目标进程。
+  - Native 侧按模式分叉：Dump 使用等待 `libil2cpp.so` 后触发 Il2CppDumper；文本拦截使用 Dobby 对目标 `set_text` 方法做 instrument 并写入 SQLite 去重存储。
+- **使用的技术栈**：
+  - Android: Kotlin、Jetpack Compose、ContentProvider
+  - Hook: LSPosed/Xposed API（compileOnly `xposed`）
+  - Native: NDK/CMake、C++17、Dobby、dlopen/xdl、sqlite3、JNI
+- **修改了哪些文件**：
+  - 新增：`chatrules`（本文件，用于累计记录会话总结）
+
+### 2026-01-28（补充：核心工作流原理详解）
+- **会话主要目的**：深入解释 Dump 模式与文本拦截模式的“执行过程 + 工作原理”（注入时机、跨进程配置、等待/解析 il2cpp、hook 与落库、结果回传）。
+- **完成的主要任务**：
+  - 以时序方式拆解：配置写入 → 注入进程读取 → JNI 分发 → Native 插件线程执行 → 产物/数据回传。
+  - 解释关键原理：为什么选 `Application.attach`、为什么用 Provider、如何等待 `libil2cpp.so`、如何把 `Namespace.Class.set_text` 解析成真实可 hook 的 `methodPointer`、为什么用 SQLite UNIQUE 去重。
+- **关键决策和解决方案**：
+  - **“配置侧”和“执行侧”解耦**：App 只管写 Provider，注入进程只管读 Provider 并下发到 native，降低同步/竞态风险（并对 targets 空列表做延迟重试）。
+  - **“等待模块加载再执行”**：Dump/Hook 都先等待 `libil2cpp.so` 出现，避免过早解析符号或安装 hook 导致失败。
+  - **“Native 回传 UI”**：Dump 完成后通过 JNI 回调到 `NativeBridge.onDumpFinished()`，在主线程 Toast 告知结果。
+- **使用的技术栈**：
+  - Android IPC: ContentProvider + ContentResolver
+  - 注入：LSPosed/Xposed（hook `Application.attach`）
+  - Native：JNI、dlopen/xdl、DobbyInstrument、sqlite3
+- **修改了哪些文件**：
+  - 更新：`chatrules`（追加本次会话总结）
+
+### 2026-01-28（补充：为何不依赖 global-metadata.dat）
+- **会话主要目的**：解释该方案为何无需用户侧提供/依赖 `global-metadata.dat`。
+- **完成的主要任务**：
+  - 说明文本拦截仅依赖运行时 `methodPointer` 与参数（`Il2CppString*`），通过 il2cpp API 解析目标方法并安装 hook。
+  - 说明 Dump 在目标进程内等待 `libil2cpp.so` 后从运行时可见的注册信息/内存结构生成 `dump.cs`，避免离线提取 metadata 的痛点（加壳/加密/拆包）。
+- **关键决策和解决方案**：
+  - **“进程内（in-process）”而非“离线（offline）”**：注入到目标进程后，Unity/Il2Cpp 已完成加载/解密/映射，metadata 以可访问形式存在于内存/映射段，可直接用于解析或 dump。
+- **使用的技术栈**：
+  - Native：dlopen/xdl、il2cpp runtime API 解析、Dobby hook、JNI 回传
+- **修改了哪些文件**：
+  - 更新：`chatrules`（追加本次会话总结）
+
+### 2026-01-28（改造：全自动批量下载/安装/dump/上传/清理）
+- **会话主要目的**：将项目改造为“全自动批处理”：从 URL 批量处理 APK（下载→安装→自动触发 dump→上传→卸载/清理→下一条）。
+- **完成的主要任务**：
+  - 新增 Provider 配置键 `target_package`，使注入逻辑只对“当前目标包名”执行，从而便于脚本批处理切换目标。
+  - 新增 Windows/跨平台可用的 ADB 自动化脚本：抓取 APK URL 列表或目录页、下载 APK、解析包名、安装、写 Provider 配置、启动目标、等待 `/sdcard/Download/<pkg>.cs`、pull 到本地并以 multipart POST 上传、清理 dump 和卸载 App。
+  - 补充文档与 README 入口说明。
+- **关键决策和解决方案**：
+  - **不尝试直接操控 LSPosed Manager UI**：改为通过 `target_package` 在运行时限定执行目标，脚本只需写 Provider 即可切换对象。
+  - **通过 ADB `content insert` 写 Provider**：避免再做 App 端 UI 自动化；脚本直接下发 `dump_mode=1` 与 `target_package=<pkg>`。
+  - **产物监听路径统一**：以 native dump 复制到 `/sdcard/Download/<pkg>.cs` 作为脚本“完成信号”，然后 pull + 上传。
+- **使用的技术栈**：
+  - Android：ContentProvider 配置扩展
+  - 自动化：Python 3（stdlib）、ADB、HTTP multipart 上传
+- **修改了哪些文件**：
+  - 更新：`app/src/main/java/com/tools/il2fusion/config/ConfigContentProvider.kt`
+  - 更新：`app/src/main/java/com/tools/il2fusion/config/HookConfigStore.kt`
+  - 更新：`app/src/main/java/com/tools/module/MainHook.kt`
+  - 新增：`tools/auto_batch_dump.py`
+  - 新增：`doc/AUTOMATION_ZH.md`
+  - 更新：`README.md`
+  - 更新：`chatrules`（追加本次会话总结）
+
+### 2026-01-28（回滚：撤回 PC 脚本与批处理入口；恢复 hook 基线行为）
+- **会话主要目的**：按要求撤回上一版“PC 端脚本批处理”相关改动，回到项目原本的手动/半自动使用方式。
+- **完成的主要任务**：
+  - 删除：`tools/auto_batch_dump.py`
+  - 删除：`doc/AUTOMATION_ZH.md`
+  - 移除 README 中“ADB 批量全自动”段落
+  - 回滚注入侧 `target_package` 限定执行逻辑（恢复为：模块启用在哪个包上，就对哪个包执行）
+  - 回滚 Provider/Store 中 `target_package` 配置键
+- **关键决策和解决方案**：
+  - 将仓库恢复为更可控的基线形态，避免引入批处理/自动化链路。
+- **使用的技术栈**：Android（Kotlin/Compose/ContentProvider）、Xposed、NDK（未新增）
+- **修改了哪些文件**：
+  - 删除：`tools/auto_batch_dump.py`
+  - 删除：`doc/AUTOMATION_ZH.md`
+  - 更新：`README.md`
+  - 更新：`app/src/main/java/com/tools/il2fusion/config/ConfigContentProvider.kt`
+  - 更新：`app/src/main/java/com/tools/il2fusion/config/HookConfigStore.kt`
+  - 更新：`app/src/main/java/com/tools/module/MainHook.kt`
+  - 更新：`chatrules`（追加本次会话总结）
+
+### 2026-01-28（说明：自动下载/安装/回传的安全限制与替代方案）
+- **会话主要目的**：回应“全自动下载 APK→安装→自动 hook→dump→上传→清理”的需求，明确安全限制并给出合规替代方案。
+- **完成的主要任务**：
+  - 说明无法实现“无需用户确认、批量安装与回传”的完整自动化链路。
+  - 提出可行替代：应用内提供 URL 输入框与开始/停止按钮，但安装与上传需用户确认。
+- **关键决策和解决方案**：
+  - 避免构建可能被滥用的自动化安装与数据回传能力，仅在用户明确授权与交互确认的前提下提供功能。
+- **使用的技术栈**：无（本次为需求与安全边界说明）
+- **修改了哪些文件**：
+  - 更新：`chatrules`（追加本次会话总结）
+
+### 2026-01-28（新增：App 内全自动批处理流程）
+- **会话主要目的**：在 App 内加入“自动批处理”流程：从 URL 目录下载 APK，安装并启动触发 dump，回传 dump.cs，删除 APK，支持开始/停止与配置输入。
+- **完成的主要任务**：
+  - 新增自动流程配置存储（下载目录 URL、回传地址）。
+  - 新增自动流程 UI（输入框、开始/停止按钮、状态与日志）。
+  - 在 ViewModel 中实现批量下载、安装、启动、等待 dump、上传与清理逻辑。
+  - 增加必要权限与包可见性查询声明。
+- **关键决策和解决方案**：
+  - 采用 `PackageInstaller` 进行安装，并处理 `STATUS_PENDING_USER_ACTION` 的用户确认流程。
+  - 通过轮询 `/sdcard/Download/<pkg>_dump.cs` 作为 dump 完成信号并上传。
+  - 使用 `HttpURLConnection` 实现 APK 下载与 multipart 上传，避免引入新依赖。
+- **使用的技术栈**：
+  - Android/Kotlin：Jetpack Compose、ViewModel + 协程、PackageInstaller、HttpURLConnection
+- **修改了哪些文件**：
+  - 新增：`app/src/main/java/com/tools/il2fusion/config/AutoFlowConfigStore.kt`
+  - 新增：`app/src/main/java/com/tools/il2fusion/ui/AutoFlowScreen.kt`
+  - 更新：`app/src/main/java/com/tools/il2fusion/ui/HookConfigViewModel.kt`
+  - 更新：`app/src/main/java/com/tools/il2fusion/ui/HookConfigApp.kt`
+  - 更新：`app/src/main/AndroidManifest.xml`
+  - 更新：`chatrules`（追加本次会话总结）
+
