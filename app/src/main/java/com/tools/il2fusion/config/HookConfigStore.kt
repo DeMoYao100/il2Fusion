@@ -6,6 +6,7 @@ import android.content.ContentValues
 import com.tools.il2fusion.config.ConfigContentProvider.Companion.CONTENT_URI
 import com.tools.il2fusion.config.ConfigContentProvider.Companion.KEY_TARGETS
 import com.tools.il2fusion.config.ConfigContentProvider.Companion.KEY_DUMP_MODE
+import com.tools.il2fusion.config.ConfigContentProvider.Companion.KEY_TARGET_PACKAGE
 
 object HookConfigStore {
     private const val TAG = "[il2Fusion]"
@@ -30,6 +31,16 @@ object HookConfigStore {
         Log.i(TAG, "saveDumpMode(): $enabled")
     }
 
+    fun saveTargetPackage(ctx: Context, pkg: String) {
+        val storeCtx = ctx.applicationContext ?: ctx
+        val values = ContentValues().apply {
+            put("key", KEY_TARGET_PACKAGE)
+            put("value", pkg)
+        }
+        storeCtx.contentResolver.insert(CONTENT_URI, values)
+        Log.i(TAG, "saveTargetPackage(): $pkg")
+    }
+
     fun loadTargetsForApp(ctx: Context): List<String> {
         val storeCtx = ctx.applicationContext ?: ctx
         return queryTargets(storeCtx)
@@ -46,6 +57,10 @@ object HookConfigStore {
 
     fun loadDumpModeForHook(ctx: Context): Boolean {
         return queryDumpMode(ctx)
+    }
+
+    fun loadTargetPackageForHook(ctx: Context): String {
+        return queryTargetPackage(ctx)
     }
 
     fun markHookedPackage(ctx: Context, pkg: String): Set<String> {
@@ -119,5 +134,28 @@ object HookConfigStore {
             Log.i(TAG, "queryTargets(): raw=$raw -> ${parsed.size} items")
             return parsed
         }
+    }
+
+    private fun queryTargetPackage(ctx: Context): String {
+        val cursor = try {
+            ctx.contentResolver.query(CONTENT_URI, null, null, null, null)
+        } catch (t: Throwable) {
+            Log.w(TAG, "queryTargetPackage() failed: ${t.message}")
+            null
+        } ?: return ""
+
+        cursor.use { c ->
+            if (!c.moveToFirst()) return ""
+            val keyIdx = c.getColumnIndex("key")
+            val valIdx = c.getColumnIndex("value")
+            do {
+                val key = if (keyIdx >= 0) c.getString(keyIdx) else ""
+                val value = if (valIdx >= 0) c.getString(valIdx) else ""
+                if (key == KEY_TARGET_PACKAGE) {
+                    return value
+                }
+            } while (c.moveToNext())
+        }
+        return ""
     }
 }

@@ -13,6 +13,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tools.il2fusion.config.AutoFlowConfigStore
 import com.tools.il2fusion.config.HookConfigRepository
+import com.tools.il2fusion.config.HookConfigStore
 import com.tools.il2fusion.utils.DumpFileParser
 import com.tools.il2fusion.utils.HookTargetUtils
 import kotlinx.coroutines.Dispatchers
@@ -244,6 +245,7 @@ class HookConfigViewModel(
                     )
                     return@forEachIndexed
                 }
+                HookConfigStore.saveTargetPackage(context, pkgName)
                 appendAutoLog("启动 $pkgName")
                 launchApp(context, pkgName)
                 updateAutoState(
@@ -271,6 +273,7 @@ class HookConfigViewModel(
                 } else {
                     appendAutoLog("上传失败：${dumpFile.name}")
                 }
+                appendAutoLog("完成：$pkgName")
                 apkFile.delete()
                 updateAutoState(
                     isRunning = true,

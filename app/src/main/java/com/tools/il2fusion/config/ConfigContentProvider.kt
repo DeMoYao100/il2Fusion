@@ -16,6 +16,7 @@ class ConfigContentProvider : ContentProvider() {
         private const val PATH_CONFIG = "config"
         const val KEY_TARGETS = "targets"
         const val KEY_DUMP_MODE = "dump_mode"
+        const val KEY_TARGET_PACKAGE = "target_package"
         private const val CODE_CONFIG = 1
         val CONTENT_URI: Uri = Uri.parse("content://$AUTHORITY/$PATH_CONFIG")
 

@@ -51,6 +51,17 @@ class MainHook: IXposedHookLoadPackage {
                     NativeBridge.setContext(ctx)
                     XposedBridge.log("$TAG Application.attach -> ctx=$ctx")
 
+                    val targetPkg = try {
+                        HookConfigStore.loadTargetPackageForHook(ctx)
+                    } catch (e: Throwable) {
+                        XposedBridge.log("$TAG loadTargetPackage failed: $e")
+                        ""
+                    }
+                    if (targetPkg.isNotBlank() && targetPkg != lpparam.packageName) {
+                        XposedBridge.log("$TAG skip ${lpparam.packageName}, target=$targetPkg")
+                        return
+                    }
+
                     // 提示：LSPosed 勾选多个 App 可能导致互相覆盖
                     try {
                         val enabledApps = HookConfigStore.markHookedPackage(ctx, lpparam.packageName)

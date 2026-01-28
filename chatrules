@@ -119,3 +119,23 @@
   - 更新：`app/src/main/AndroidManifest.xml`
   - 更新：`chatrules`（追加本次会话总结）
 
+### 2026-01-28（补充：避免手动勾选包的自动目标过滤）
+- **会话主要目的**：在不自动操控 LSPosed 勾选的前提下，实现“全自动批量下载→安装→dump→上传”，并让回传文件名带包名前缀。
+- **完成的主要任务**：
+  - 新增 `target_package` 配置键，注入侧按目标包名过滤执行。
+  - 自动流程在启动前写入目标包名，并记录每个 APK 成功/失败日志。
+  - dump 复制文件名改为 `<包名>_dump.cs`，流程等待与上传保持一致。
+- **关键决策和解决方案**：
+  - 以“模块全局启用 + 运行时目标包过滤”替代“自动勾选包”，避免无法控制 LSPosed UI 的限制。
+  - 统一 dump 文件命名以便批处理与服务端回收识别。
+- **使用的技术栈**：
+  - Android/Kotlin：ContentProvider 配置扩展、ViewModel 协程
+  - Native/C++：dump 产物命名调整
+- **修改了哪些文件**：
+  - 更新：`app/src/main/java/com/tools/il2fusion/config/ConfigContentProvider.kt`
+  - 更新：`app/src/main/java/com/tools/il2fusion/config/HookConfigStore.kt`
+  - 更新：`app/src/main/java/com/tools/module/MainHook.kt`
+  - 更新：`app/src/main/java/com/tools/il2fusion/ui/HookConfigViewModel.kt`
+  - 更新：`app/src/main/cpp/plugins/dump/dump.cpp`
+  - 更新：`chatrules`（追加本次会话总结）
+

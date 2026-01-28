@@ -60,7 +60,7 @@ void NotifyDumpResult(bool success, const char* msg) {
 
 bool CopyDumpToSdcard(const std::string& pkg, std::string& out_path) {
     const std::string src = g_dump_dir + "/files/dump.cs";
-    out_path = "/sdcard/Download/" + pkg + ".cs";
+    out_path = "/sdcard/Download/" + pkg + "_dump.cs";
     const std::string cmd = "su -c 'cp " + src + " " + out_path + "'";
     const int ret = system(cmd.c_str());
     if (ret == 0) {
