@@ -1,0 +1,98 @@
+#include <jni.h>
+
+#include <atomic>
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#include "plugins/dump/dump.h"
+#include "plugins/textExtractor/textExtractor.h"
+#include "utils/log.h"
+#include "utils/utils.h"
+
+namespace {
+std::atomic_bool g_initialized{false};
+std::string g_process_name = "unknown";
+}  // namespace
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_tools_module_NativeBridge_init(JNIEnv* env, jclass /*clazz*/, jstring processName) {
+    if (processName != nullptr) {
+        const char* utf = env->GetStringUTFChars(processName, nullptr);
+        if (utf != nullptr) {
+            g_process_name.assign(utf);
+            env->ReleaseStringUTFChars(processName, utf);
+        }
+    }
+
+    dump_plugin::SetProcess(g_process_name);
+    text_extractor::Init(g_process_name);
+
+    if (g_initialized.exchange(true)) {
+        LOGI("[%s] Native init already completed", g_process_name.c_str());
+        return;
+    }
+
+    LOGI("[%s] Native init start", g_process_name.c_str());
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_tools_module_NativeBridge_setTargets(JNIEnv* env, jclass /*clazz*/, jobjectArray targets) {
+    if (targets == nullptr) {
+        return;
+    }
+
+    const jsize len = env->GetArrayLength(targets);
+    std::vector<std::string> names;
+    names.reserve(static_cast<size_t>(len));
+
+    for (jsize i = 0; i < len; ++i) {
+        auto str = static_cast<jstring>(env->GetObjectArrayElement(targets, i));
+        if (str == nullptr) {
+            continue;
+        }
+        const char* utf = env->GetStringUTFChars(str, nullptr);
+        if (utf != nullptr) {
+            names.emplace_back(utf);
+            env->ReleaseStringUTFChars(str, utf);
+        }
+        env->DeleteLocalRef(str);
+    }
+
+    text_extractor::UpdateTargets(names);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_tools_module_NativeBridge_startDump(JNIEnv* env, jclass /*clazz*/, jstring dataDir) {
+    const char* path = dataDir != nullptr ? env->GetStringUTFChars(dataDir, nullptr) : nullptr;
+    std::string dir;
+    if (path != nullptr) {
+        dir.assign(path);
+        env->ReleaseStringUTFChars(dataDir, path);
+    }
+    dump_plugin::StartDump(dir);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_tools_module_NativeBridge_isIl2cppLoaded(JNIEnv* /*env*/, jclass /*clazz*/) {
+    return hookutils::FindModuleBase("libil2cpp.so") != 0 ? JNI_TRUE : JNI_FALSE;
+}
+
+jint JNI_OnLoad(JavaVM* vm, void*) {
+    LOGI("JNI_OnLoad");
+    JNIEnv* env = nullptr;
+    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+        return JNI_VERSION_1_6;
+    }
+    jclass cls = env->FindClass("com/tools/module/NativeBridge");
+    if (cls != nullptr) {
+        jclass global_cls = static_cast<jclass>(env->NewGlobalRef(cls));
+        env->DeleteLocalRef(cls);
+        jmethodID on_dump_finished = env->GetStaticMethodID(
+                global_cls,
+                "onDumpFinished",
+                "(ZLjava/lang/String;)V");
+        dump_plugin::SetJavaCallbacks(vm, global_cls, on_dump_finished);
+    }
+    return JNI_VERSION_1_6;
+}
