@@ -11,7 +11,6 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.TextView
-import android.widget.Toast
 import java.util.ArrayDeque
 
 object OverlayLogger {
@@ -22,34 +21,29 @@ object OverlayLogger {
     private var windowManager: WindowManager? = null
     private var textView: TextView? = null
     private var viewAdded = false
-    private var canOverlay = false
 
     fun init(ctx: Context) {
         if (appContext != null) return
         val baseCtx = ctx.applicationContext ?: ctx
         appContext = baseCtx
         windowManager = baseCtx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        canOverlay = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            Settings.canDrawOverlays(baseCtx)
-        } else {
-            true
-        }
     }
 
     fun append(message: String) {
         val ctx = appContext ?: return
         handler.post {
-            if (canOverlay) {
-                ensureView(ctx)
-                updateLines(message)
-            } else {
-                showToast(ctx, message)
-            }
+            ensureView(ctx)
+            updateLines(message)
         }
     }
 
     private fun ensureView(ctx: Context) {
         if (viewAdded) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(ctx)) {
+                return
+            }
+        }
         val tv = TextView(ctx).apply {
             setTextColor(Color.WHITE)
             setBackgroundColor(0xAA000000.toInt())
@@ -78,7 +72,7 @@ object OverlayLogger {
             textView = tv
             viewAdded = true
         } catch (_: Throwable) {
-            canOverlay = false
+            // ignore overlay add failure
         }
     }
 
@@ -88,13 +82,6 @@ object OverlayLogger {
         }
         lines.addLast(message)
         textView?.text = lines.joinToString(separator = "\n")
-    }
-
-    private fun showToast(ctx: Context, message: String) {
-        Toast.makeText(ctx, message, Toast.LENGTH_SHORT).apply {
-            setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, dp(ctx, 24))
-            show()
-        }
     }
 
     private fun dp(ctx: Context, value: Int): Int {
